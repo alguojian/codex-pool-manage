@@ -16,6 +16,7 @@ interface RightSidebarProps {
   onRestartOpenClaw?: () => void;
   onRefreshAllTokens?: () => void;
   onCheckAllUsage?: () => void;
+  onVerifySwitch?: () => void;
 }
 
 export function RightSidebar({
@@ -24,6 +25,7 @@ export function RightSidebar({
   onRotateNow,
   onRestartOpenClaw,
   onCheckAllUsage,
+  onVerifySwitch,
 }: RightSidebarProps) {
   const { t } = useI18n();
 
@@ -46,6 +48,13 @@ export function RightSidebar({
           <Button onClick={onCheckAllUsage} variant="outline" className="w-full h-10 text-sm border-primary/30 text-primary hover:bg-primary/10 transition-fast">
             <Zap className="h-4 w-4 mr-2" />
             检测所有账号用量
+          </Button>
+        )}
+
+        {onVerifySwitch && (
+          <Button onClick={onVerifySwitch} variant="outline" className="w-full h-10 text-sm border-info/30 text-info hover:bg-info/10 transition-fast">
+            <RefreshCcw className="h-4 w-4 mr-2" />
+            验证账号切换
           </Button>
         )}
       </div>
@@ -102,7 +111,7 @@ export function RightSidebar({
       </div>
 
       {/* Codex 路径 */}
-      <div className="p-5 border-b border-border/40 space-y-4">
+      <div className="p-5 space-y-4">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('right.codexConfig')}</h3>
 
         <div className="space-y-2">
@@ -113,48 +122,18 @@ export function RightSidebar({
             className="h-10 text-sm bg-input border-border/40 font-mono transition-fast hover:border-primary/30 focus:border-primary"
             placeholder="留空自动探测"
           />
-        </div>
-      </div>
-
-      {/* Openclaw 集成 */}
-      <div className="p-5 space-y-4">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('right.openclawIntegration')}</h3>
-
-        <div className="flex items-center gap-2.5 text-sm px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
-          <span className="h-2 w-2 rounded-full bg-primary animate-pulse-dot" />
-          <span className="text-muted-foreground font-medium">Connected</span>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-sm text-muted-foreground font-medium">{t('right.endpoint')}</Label>
-          <Input
-            value={settings.openclaw_endpoint}
-            onChange={(e) => update({ openclaw_endpoint: e.target.value })}
-            className="h-10 text-sm bg-input border-border/40 font-mono transition-fast hover:border-primary/30 focus:border-primary"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-sm text-muted-foreground font-medium">{t('right.apiKey')}</Label>
-          <Input
-            type="password"
-            value={settings.openclaw_api_key}
-            onChange={(e) => update({ openclaw_api_key: e.target.value })}
-            className="h-10 text-sm bg-input border-border/40 transition-fast hover:border-primary/30 focus:border-primary"
-            placeholder="••••••••"
-          />
+          <p className="text-xs text-muted-foreground">
+            切换账号时会自动更新 ~/.codex/auth.json
+          </p>
         </div>
 
         <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-secondary/30 transition-fast">
-          <Label className="text-sm text-muted-foreground font-medium cursor-pointer">{t('right.autoDispatch')}</Label>
-          <Switch checked={settings.auto_dispatch} onCheckedChange={(v) => update({ auto_dispatch: v })} />
+          <div className="flex flex-col gap-0.5">
+            <Label className="text-sm text-muted-foreground font-medium cursor-pointer">自动终止 Codex 进程</Label>
+            <span className="text-xs text-muted-foreground/70">切换账号后自动终止旧进程</span>
+          </div>
+          <Switch checked={settings.auto_kill_codex} onCheckedChange={(v) => update({ auto_kill_codex: v })} />
         </div>
-        {onRestartOpenClaw && (
-          <Button onClick={onRestartOpenClaw} variant="outline" className="w-full h-10 text-sm border-info/30 text-info hover:bg-info/10 transition-fast">
-            <RefreshCcw className="h-4 w-4 mr-2" />
-            {t('right.reloadOpenClaw')}
-          </Button>
-        )}
       </div>
     </aside>
   );

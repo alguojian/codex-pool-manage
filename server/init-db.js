@@ -101,6 +101,7 @@ async function createTables() {
       auto_launch BOOLEAN NOT NULL DEFAULT FALSE,
       auto_token_refresh BOOLEAN NOT NULL DEFAULT TRUE,
       token_refresh_interval_hours INT NOT NULL DEFAULT 72,
+      auto_kill_codex BOOLEAN NOT NULL DEFAULT TRUE,
       updated_at DATETIME NOT NULL
     )
   `);
@@ -257,6 +258,7 @@ async function migrateSettings() {
   const migrations = [
     "ALTER TABLE settings ADD COLUMN auto_token_refresh BOOLEAN NOT NULL DEFAULT TRUE",
     "ALTER TABLE settings ADD COLUMN token_refresh_interval_hours INT NOT NULL DEFAULT 72",
+    "ALTER TABLE settings ADD COLUMN auto_kill_codex BOOLEAN NOT NULL DEFAULT TRUE",
     "ALTER TABLE accounts ADD COLUMN platform VARCHAR(50) NOT NULL DEFAULT 'gpt'",
   ];
   for (const sql of migrations) {

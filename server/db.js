@@ -25,4 +25,5 @@ export const pool = mysql.createPool({
   idleTimeout: 60000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 30000,
+  charset: 'utf8mb4',
 });

@@ -124,24 +124,58 @@ const LogsPage = () => {
             </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-background/50 p-4 font-mono text-xs">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-background/50">
             {logs.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">{t('logs.empty')}</p>
             ) : (
-              <div className="space-y-0.5">
-                {logs.map((log) => (
-                  <div key={log.id} className="flex gap-3 py-0.5 hover:bg-secondary/20 px-2 rounded">
-                    <span className="text-muted-foreground shrink-0 tabular-nums">
-                      {new Date(log.created_at).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                    <span className={`shrink-0 w-12 uppercase font-semibold ${levelColors[log.level]}`}>
-                      {log.level}
-                    </span>
-                    <span className="text-info shrink-0 w-16">{log.account_name || '—'}</span>
-                    <span className="text-foreground/80">{log.message}</span>
-                  </div>
-                ))}
-              </div>
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border/50 z-10">
+                  <tr>
+                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground uppercase tracking-wider w-32">时间</th>
+                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground uppercase tracking-wider w-20">级别</th>
+                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground uppercase tracking-wider w-40">账号</th>
+                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground uppercase tracking-wider">消息</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono">
+                  {logs.map((log, index) => (
+                    <tr 
+                      key={log.id} 
+                      className={`border-b border-border/30 hover:bg-secondary/20 transition-colors ${
+                        index % 2 === 0 ? 'bg-background/30' : 'bg-background/50'
+                      }`}
+                    >
+                      <td className="py-2.5 px-4 text-muted-foreground tabular-nums whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString('zh-CN', { 
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit', 
+                          minute: '2-digit', 
+                          second: '2-digit',
+                          hour12: false 
+                        })}
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          log.level === 'error' 
+                            ? 'bg-destructive/15 text-destructive border border-destructive/30' 
+                            : log.level === 'warn'
+                            ? 'bg-warning/15 text-warning border border-warning/30'
+                            : 'bg-primary/10 text-primary/80 border border-primary/20'
+                        }`}>
+                          {log.level}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-info truncate max-w-[200px]" title={log.account_name || '—'}>
+                        {log.account_name || '—'}
+                      </td>
+                      <td className="py-2.5 px-4 text-foreground/90 break-words">
+                        {log.message}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

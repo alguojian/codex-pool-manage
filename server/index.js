@@ -632,29 +632,79 @@ function pickNextAccount(allAccounts, currentId, strategy = 'round_robin') {
 }
 
 /**
- * 执行账号切换的通用逻辑（更新数据库 + 切换 auth 文件 + 重载 OpenClaw）
+ * 终止所有正在运行的 Codex 进程
+ * 这样下次运行 codex 命令时会使用新的 auth 文件
+ */
+async function killCodexProcesses() {
+  try {
+    if (process.platform === 'win32') {
+      // Windows: 使用 taskkill
+      await execAsync('taskkill /F /IM codex.exe 2>nul || exit 0');
+      await execAsync('taskkill /F /IM node.exe /FI "WINDOWTITLE eq codex*" 2>nul || exit 0');
+    } else {
+      // Unix-like: 使用 pkill
+      await execAsync("pkill -f 'codex' || true");
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+}
+
+/**
+ * 执行账号切换的通用逻辑（更新数据库 + 切换 auth 文件）
  */
 async function performAccountSwitch(nextAccount, reason) {
-  await switchAuthFile(nextAccount.auth_file_path);
+  // 1. 切换 auth 文件到 ~/.codex/auth.json
+  const src = expandPath(nextAccount.auth_file_path);
+  const defaultAuthDir = path.join(os.homedir(), '.codex');
+  const dest = path.join(defaultAuthDir, 'auth.json');
+
+  try {
+    await fs.access(src);
+    await fs.mkdir(defaultAuthDir, { recursive: true });
+    await fs.copyFile(src, dest);
+    await createLog({ accountId: nextAccount.id, message: `[切换] 已复制 auth 文件到 ${dest}` });
+  } catch (err) {
+    await createLog({ accountId: nextAccount.id, level: 'error', message: `[切换失败] ${err.message}` });
+    throw new Error(`切换 auth 文件失败: ${err.message}`);
+  }
+
+  // 2. 更新数据库
   await pool.execute("UPDATE accounts SET is_current = FALSE, status = CASE WHEN status = 'active' THEN 'idle' ELSE status END, updated_at = NOW()");
   await pool.execute("UPDATE accounts SET is_current = TRUE, status = 'active', updated_at = NOW() WHERE id = ?", [nextAccount.id]);
   await createLog({ accountId: nextAccount.id, message: reason });
 
-  // 从 auth 文件中获取 accountId 用于文件监控
+  // 3. 验证切换结果
   try {
-    const authFilePath = expandPath(nextAccount.auth_file_path);
-    const authData = JSON.parse(await fs.readFile(authFilePath, 'utf8'));
-    const payload = decodeJwtPayload(authData.tokens?.access_token);
-    const accId = payload?.['https://api.openai.com/auth']?.chatgpt_account_id;
-    if (accId) setExpectedAccountId(accId);
-  } catch { /* 忽略 */ }
+    const codexAuth = JSON.parse(await fs.readFile(dest, 'utf8'));
+    const codexToken = codexAuth.tokens?.access_token;
+    
+    const targetAuth = JSON.parse(await fs.readFile(src, 'utf8'));
+    const targetToken = targetAuth.tokens?.access_token;
 
-  // 重载 OpenClaw，确保它使用新 token
-  const reloadResult = await reloadOpenClaw();
-  if (reloadResult.ok) {
-    await createLog({ accountId: nextAccount.id, message: `[OpenClaw] 已重载 (${reloadResult.method})` });
+    if (codexToken === targetToken) {
+      await createLog({ accountId: nextAccount.id, message: `[验证] Codex auth 文件切换成功 ✓` });
+    } else {
+      await createLog({ accountId: nextAccount.id, level: 'error', message: `[验证] Codex auth 文件不匹配！` });
+    }
+  } catch (err) {
+    await createLog({ accountId: nextAccount.id, level: 'warn', message: `[验证] 无法验证切换结果: ${err.message}` });
+  }
+
+  // 4. 根据设置决定是否终止正在运行的 Codex 进程
+  const [settingsRows] = await pool.query('SELECT auto_kill_codex FROM settings WHERE id = 1');
+  const autoKillCodex = settingsRows[0]?.auto_kill_codex ?? true;
+
+  if (autoKillCodex) {
+    const killResult = await killCodexProcesses();
+    if (killResult.ok) {
+      await createLog({ accountId: nextAccount.id, message: `[切换] 已终止旧的 Codex 进程，下次运行将使用新账号` });
+    } else {
+      await createLog({ accountId: nextAccount.id, level: 'warn', message: `[切换] 无法终止 Codex 进程: ${killResult.reason}` });
+    }
   } else {
-    await createLog({ accountId: nextAccount.id, level: 'warn', message: `[OpenClaw] 重载失败: ${reloadResult.reason}` });
+    await createLog({ accountId: nextAccount.id, message: `[切换] 已切换 auth 文件，请手动重启 Codex 以使用新账号` });
   }
 }
 
@@ -1438,6 +1488,7 @@ app.put('/api/settings', asyncHandler(async (req, res) => {
       auto_retry = ?, max_retries = ?, task_timeout_minutes = ?, auto_dispatch = ?,
       openclaw_endpoint = ?, openclaw_api_key = ?, codex_path = ?, trae_path = ?,
       mode = ?, auto_launch = ?, auto_token_refresh = ?, token_refresh_interval_hours = ?,
+      auto_kill_codex = ?,
       updated_at = NOW()
     WHERE id = 1`,
     [
@@ -1460,6 +1511,7 @@ app.put('/api/settings', asyncHandler(async (req, res) => {
       body.auto_launch,
       body.auto_token_refresh ?? true,
       body.token_refresh_interval_hours ?? 72,
+      body.auto_kill_codex ?? true,
     ],
   );
   await createLog({ level: 'info', message: 'Settings updated' });
@@ -1631,6 +1683,58 @@ app.post('/api/actions/restart-openclaw', asyncHandler(async (_req, res) => {
     level: result.ok ? 'info' : 'warn',
     message: `[OpenClaw] 手动重载: ${result.ok ? result.method : result.reason}`,
   });
+  res.json(result);
+}));
+
+// 验证当前账号切换状态（简化版，不检查 OpenClaw）
+app.get('/api/actions/verify-switch', asyncHandler(async (_req, res) => {
+  const [activeRows] = await pool.query("SELECT * FROM accounts WHERE is_current = TRUE LIMIT 1");
+  if (!activeRows.length) {
+    return res.json({ ok: false, reason: 'no_active_account' });
+  }
+
+  const account = activeRows[0];
+  const codexAuthPath = path.join(os.homedir(), '.codex', 'auth.json');
+
+  const result = {
+    ok: true,
+    account_id: account.account_id,
+    checks: {
+      codex_file_exists: false,
+      codex_token_match: false,
+    },
+    details: {},
+  };
+
+  // 检查 Codex auth 文件
+  try {
+    await fs.access(codexAuthPath);
+    result.checks.codex_file_exists = true;
+
+    const codexAuth = JSON.parse(await fs.readFile(codexAuthPath, 'utf8'));
+    const codexToken = codexAuth.tokens?.access_token;
+
+    const targetAuth = JSON.parse(await fs.readFile(expandPath(account.auth_file_path), 'utf8'));
+    const targetToken = targetAuth.tokens?.access_token;
+
+    result.checks.codex_token_match = codexToken === targetToken;
+    result.details.codex_token_preview = codexToken ? codexToken.slice(0, 20) + '...' : null;
+    result.details.target_token_preview = targetToken ? targetToken.slice(0, 20) + '...' : null;
+    result.details.codex_path = codexAuthPath;
+    result.details.target_path = account.auth_file_path;
+  } catch (err) {
+    result.details.codex_error = err.message;
+  }
+
+  // 判断整体状态
+  result.ok = result.checks.codex_token_match;
+  if (!result.ok) {
+    result.reason = [];
+    if (!result.checks.codex_file_exists) result.reason.push('codex_file_missing');
+    if (!result.checks.codex_token_match) result.reason.push('codex_token_mismatch');
+    result.reason = result.reason.join(', ');
+  }
+
   res.json(result);
 }));
 

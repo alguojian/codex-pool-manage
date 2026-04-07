@@ -190,6 +190,20 @@ const Index = () => {
     }
   };
 
+  const handleVerifySwitch = async () => {
+    try {
+      const result = await api.verifySwitch();
+      if (result.ok) {
+        toast.success(`账号切换验证通过 ✓ (${result.account_id})`);
+      } else {
+        toast.error(`账号切换验证失败: ${result.reason}`, { duration: 5000 });
+        console.log('验证详情:', result);
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+
   if (loading || !settings) {
     return <div className="h-screen grid place-items-center text-sm text-muted-foreground">{t('loading.dashboard')}</div>;
   }
@@ -221,6 +235,7 @@ const Index = () => {
           onRestartOpenClaw={handleRestartOpenClaw}
           onRefreshAllTokens={handleRefreshAllTokens}
           onCheckAllUsage={handleCheckAllUsage}
+          onVerifySwitch={handleVerifySwitch}
         />
       </div>
     </div>

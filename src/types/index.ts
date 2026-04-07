@@ -80,4 +80,5 @@ export interface PoolSettings {
   auto_launch: boolean;
   auto_token_refresh: boolean;
   token_refresh_interval_hours: number;
+  auto_kill_codex: boolean;
 }

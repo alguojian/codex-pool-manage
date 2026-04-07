@@ -104,6 +104,19 @@ export const api = {
     error?: string;
   }>(`/api/accounts/scan-dir${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`),
   refreshAllTokens: () => request<{ ok: boolean; total: number; success: number; results: Array<{ id: string; account_id: string; ok: boolean; reason?: string; newExpiresAt?: string }> }>('/api/actions/refresh-all-tokens', { method: 'POST' }),
+  verifySwitch: () => request<{
+    ok: boolean;
+    reason?: string;
+    account_id: string;
+    checks: {
+      codex_file_exists: boolean;
+      codex_token_match: boolean;
+      openclaw_file_exists: boolean;
+      openclaw_token_match: boolean;
+      openclaw_process_running: boolean;
+    };
+    details: Record<string, any>;
+  }>('/api/actions/verify-switch'),
   startCodexLogin: () => request<{ ok: boolean }>('/api/auth/codex-login', { method: 'POST' }),
   getCodexLoginStatus: () => request<{
     status: 'idle' | 'running' | 'success' | 'error';

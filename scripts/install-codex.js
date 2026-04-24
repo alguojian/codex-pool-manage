@@ -5,8 +5,8 @@
  * 在 npm install 后自动运行
  */
 
-const { execSync } = require('child_process');
-const os = require('os');
+import { execSync } from 'child_process';
+import os from 'os';
 
 function isCodexInstalled() {
   try {

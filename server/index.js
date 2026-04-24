@@ -9,8 +9,8 @@ import { fileURLToPath } from 'url';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { config } from './config.js';
-import { initDatabase } from './init-db.js';
-import { pool } from './db.js';
+import { initDatabase } from './init-db-sqlite.js';
+import { pool } from './db-sqlite.js';
 
 // 项目根目录（server/ 的上一层）
 const __filename = fileURLToPath(import.meta.url);
